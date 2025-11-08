@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Button,
@@ -7,10 +7,16 @@ import {
   Container,
   CircularProgress,
   Alert,
+  Autocomplete,
+  TextField,
+  Card,
+  CardContent,
 } from "@mui/material";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import DirectionsBoatIcon from "@mui/icons-material/DirectionsBoat";
+import { RouteMap } from "./components/RouteMap";
+import Grid from "@mui/material/Grid";
 
 const theme = createTheme({
   palette: {
@@ -23,13 +29,69 @@ const theme = createTheme({
   },
 });
 
+interface Port {
+  name: string;
+  lat: number;
+  lon: number;
+  country: string;
+}
+
+interface RouteData {
+  origin: { name: string; coords: [number, number] };
+  destination: { name: string; coords: [number, number] };
+  routes: {
+    optimized: [number, number][];
+    direct: [number, number][];
+  };
+  hazards: Array<{ center: [number, number]; radius: number; type: string }>;
+  metrics?: {
+    optimized: {
+      distance_nm: number;
+      fuel_cost_usd: number;
+      emissions_tons: number;
+    };
+    direct: {
+      distance_nm: number;
+    };
+  };
+}
+
 function App() {
-  const [showRoute, setShowRoute] = useState(false);
+  const [ports, setPorts] = useState<Port[]>([]);
+  const [selectedOrigin, setSelectedOrigin] = useState<Port | null>(null);
+  const [selectedDestination, setSelectedDestination] = useState<Port | null>(
+    null
+  );
+  const [routeData, setRouteData] = useState<RouteData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [routeImage, setRouteImage] = useState<string | null>(null);
+
+  // Fetch available ports on mount
+  useEffect(() => {
+    fetch("http://127.0.0.1:5000/api/ports")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setPorts(data.ports);
+          // Set default values
+          setSelectedOrigin(
+            data.ports.find((p: Port) => p.name === "Singapore") ||
+              data.ports[0]
+          );
+          setSelectedDestination(
+            data.ports.find((p: Port) => p.name === "Shanghai") || data.ports[1]
+          );
+        }
+      })
+      .catch((err) => console.error("Failed to fetch ports:", err));
+  }, []);
 
   const handleGenerateRoute = async () => {
+    if (!selectedOrigin || !selectedDestination) {
+      setError("Please select both origin and destination ports");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -39,13 +101,16 @@ function App() {
         headers: {
           "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          origin: selectedOrigin.name,
+          destination: selectedDestination.name,
+        }),
       });
 
       const data = await response.json();
 
       if (data.success) {
-        setRouteImage(data.image);
-        setShowRoute(true);
+        setRouteData(data);
       } else {
         setError(data.error || "Failed to generate route");
       }
@@ -62,17 +127,8 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Container maxWidth="lg">
-        <Box
-          sx={{
-            minHeight: "100vh",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            py: 4,
-          }}
-        >
+      <Container maxWidth="xl">
+        <Box sx={{ py: 4 }}>
           <Typography
             variant="h3"
             component="h1"
@@ -81,93 +137,126 @@ function App() {
               fontWeight: 700,
               color: "primary.main",
               mb: 4,
+              textAlign: "center",
             }}
           >
-            AI Captain - Ship Route Generator
+            AI Captain - Ship Route Optimizer
           </Typography>
 
-          <Button
-            variant="contained"
-            size="large"
-            startIcon={
-              loading ? (
-                <CircularProgress size={20} color="inherit" />
-              ) : (
-                <DirectionsBoatIcon />
-              )
-            }
-            onClick={handleGenerateRoute}
-            disabled={loading}
-            sx={{
-              px: 6,
-              py: 2,
-              fontSize: "1.1rem",
-              fontWeight: 600,
-              borderRadius: 2,
-              boxShadow: 3,
-              "&:hover": {
-                boxShadow: 6,
-                transform: "translateY(-2px)",
-              },
-              transition: "all 0.3s ease",
-            }}
-          >
-            {loading ? "Generating..." : "Generate Ship Route"}
-          </Button>
+          {/* Port Selection */}
+          <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12, md: 5 }}>
+                <Autocomplete
+                  options={ports}
+                  getOptionLabel={(option) =>
+                    `${option.name} (${option.country})`
+                  }
+                  value={selectedOrigin}
+                  onChange={(_, newValue) => setSelectedOrigin(newValue)}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Origin Port" />
+                  )}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 5 }}>
+                <Autocomplete
+                  options={ports}
+                  getOptionLabel={(option) =>
+                    `${option.name} (${option.country})`
+                  }
+                  value={selectedDestination}
+                  onChange={(_, newValue) => setSelectedDestination(newValue)}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Destination Port" />
+                  )}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 2 }}>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  size="large"
+                  startIcon={
+                    loading ? (
+                      <CircularProgress size={20} color="inherit" />
+                    ) : (
+                      <DirectionsBoatIcon />
+                    )
+                  }
+                  onClick={handleGenerateRoute}
+                  disabled={loading || !selectedOrigin || !selectedDestination}
+                  sx={{ height: "56px" }}
+                >
+                  {loading ? "Calculating..." : "Optimize"}
+                </Button>
+              </Grid>
+            </Grid>
+          </Paper>
 
           {error && (
-            <Alert severity="error" sx={{ mt: 3, width: "100%" }}>
+            <Alert severity="error" sx={{ mb: 3 }}>
               {error}
             </Alert>
           )}
 
-          {showRoute && routeImage && (
-            <Paper
-              elevation={4}
-              sx={{
-                mt: 6,
-                p: 3,
-                borderRadius: 3,
-                width: "100%",
-                animation: "fadeIn 0.5s ease-in",
-                "@keyframes fadeIn": {
-                  from: {
-                    opacity: 0,
-                    transform: "translateY(20px)",
-                  },
-                  to: {
-                    opacity: 1,
-                    transform: "translateY(0)",
-                  },
-                },
-              }}
-            >
-              <Typography
-                variant="h5"
-                component="h2"
-                gutterBottom
-                sx={{
-                  fontWeight: 600,
-                  color: "text.primary",
-                  mb: 3,
-                  textAlign: "center",
-                }}
-              >
-                Generated Route
-              </Typography>
-              <Box
-                component="img"
-                src={routeImage}
-                alt="Ship Route"
-                sx={{
-                  width: "100%",
-                  maxHeight: "500px",
-                  objectFit: "contain",
-                  borderRadius: 2,
-                  boxShadow: 2,
-                }}
-              />
-            </Paper>
+          {/* Route Map */}
+          {routeData && (
+            <Box>
+              <Paper elevation={4} sx={{ p: 3, mb: 3 }}>
+                <Typography variant="h5" gutterBottom>
+                  Route Visualization
+                </Typography>
+                <RouteMap data={routeData} />
+              </Paper>
+
+              {/* Metrics */}
+              {routeData.metrics && (
+                <Grid container spacing={3}>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary" gutterBottom>
+                          Distance (Optimized)
+                        </Typography>
+                        <Typography variant="h4" color="primary">
+                          {routeData.metrics.optimized.distance_nm.toFixed(0)}{" "}
+                          NM
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary" gutterBottom>
+                          Fuel Cost (Est.)
+                        </Typography>
+                        <Typography variant="h4" color="secondary">
+                          $
+                          {routeData.metrics.optimized.fuel_cost_usd.toLocaleString()}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 45 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary" gutterBottom>
+                          CO₂ Emissions
+                        </Typography>
+                        <Typography variant="h4" sx={{ color: "#2e7d32" }}>
+                          {routeData.metrics.optimized.emissions_tons.toFixed(
+                            1
+                          )}{" "}
+                          tons
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </Grid>
+              )}
+            </Box>
           )}
         </Box>
       </Container>
