@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { Box, Button, Typography, Paper, Container } from "@mui/material";
+import {
+  Box,
+  Button,
+  Typography,
+  Paper,
+  Container,
+  CircularProgress,
+  Alert,
+} from "@mui/material";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import DirectionsBoatIcon from "@mui/icons-material/DirectionsBoat";
@@ -17,9 +25,38 @@ const theme = createTheme({
 
 function App() {
   const [showRoute, setShowRoute] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [routeImage, setRouteImage] = useState<string | null>(null);
 
-  const handleGenerateRoute = () => {
-    setShowRoute(true);
+  const handleGenerateRoute = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("http://127.0.0.1:5000/api/generate-route", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setRouteImage(data.image);
+        setShowRoute(true);
+      } else {
+        setError(data.error || "Failed to generate route");
+      }
+    } catch (err) {
+      setError(
+        "Failed to connect to backend. Make sure Flask server is running on port 5000."
+      );
+      console.error("Error:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -52,8 +89,15 @@ function App() {
           <Button
             variant="contained"
             size="large"
-            startIcon={<DirectionsBoatIcon />}
+            startIcon={
+              loading ? (
+                <CircularProgress size={20} color="inherit" />
+              ) : (
+                <DirectionsBoatIcon />
+              )
+            }
             onClick={handleGenerateRoute}
+            disabled={loading}
             sx={{
               px: 6,
               py: 2,
@@ -68,10 +112,16 @@ function App() {
               transition: "all 0.3s ease",
             }}
           >
-            Generate Ship Route
+            {loading ? "Generating..." : "Generate Ship Route"}
           </Button>
 
-          {showRoute && (
+          {error && (
+            <Alert severity="error" sx={{ mt: 3, width: "100%" }}>
+              {error}
+            </Alert>
+          )}
+
+          {showRoute && routeImage && (
             <Paper
               elevation={4}
               sx={{
@@ -107,7 +157,7 @@ function App() {
               </Typography>
               <Box
                 component="img"
-                src="/shiproute.png"
+                src={routeImage}
                 alt="Ship Route"
                 sx={{
                   width: "100%",
