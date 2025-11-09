@@ -54,3 +54,4 @@ env/
 ENV/
 *.egg-info/
 .pytest_cache/
+*.tif
