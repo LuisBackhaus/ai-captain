@@ -9,8 +9,6 @@ import {
   Alert,
   Autocomplete,
   TextField,
-  Card,
-  CardContent,
 } from "@mui/material";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
@@ -79,7 +77,8 @@ function App() {
               data.ports[0]
           );
           setSelectedDestination(
-            data.ports.find((p: Port) => p.name === "Shanghai") || data.ports[1]
+            data.ports.find((p: Port) => p.name === "Rotterdam") ||
+              data.ports[1]
           );
         }
       })
@@ -96,6 +95,7 @@ function App() {
     setError(null);
 
     try {
+      // Use the route-with-graph endpoint
       const response = await fetch("http://127.0.0.1:5000/api/generate-route", {
         method: "POST",
         headers: {
@@ -104,6 +104,7 @@ function App() {
         body: JSON.stringify({
           origin: selectedOrigin.name,
           destination: selectedDestination.name,
+          use_bathymetry: false,
         }),
       });
 
@@ -111,6 +112,7 @@ function App() {
 
       if (data.success) {
         setRouteData(data);
+        console.log("Route generated:", data);
       } else {
         setError(data.error || "Failed to generate route");
       }
@@ -140,7 +142,7 @@ function App() {
               textAlign: "center",
             }}
           >
-            AI Captain - Ship Route Optimizer
+            🚢 AI Captain - Maritime Route Optimizer
           </Typography>
 
           {/* Port Selection */}
@@ -188,7 +190,7 @@ function App() {
                   disabled={loading || !selectedOrigin || !selectedDestination}
                   sx={{ height: "56px" }}
                 >
-                  {loading ? "Calculating..." : "Optimize"}
+                  {loading ? "Calculating..." : "Optimize Route"}
                 </Button>
               </Grid>
             </Grid>
@@ -202,61 +204,58 @@ function App() {
 
           {/* Route Map */}
           {routeData && (
-            <Box>
-              <Paper elevation={4} sx={{ p: 3, mb: 3 }}>
-                <Typography variant="h5" gutterBottom>
-                  Route Visualization
-                </Typography>
-                <RouteMap data={routeData} />
-              </Paper>
+            <Paper elevation={4} sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h5" gutterBottom>
+                Route Visualization
+              </Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                🔵 Dashed line = Direct route | 🟢 Solid line = Optimized route
+              </Typography>
 
-              {/* Metrics */}
+              {/* Display metrics as a summary above the map */}
               {routeData.metrics && (
-                <Grid container spacing={3}>
-                  <Grid size={{ xs: 12, md: 4 }}>
-                    <Card>
-                      <CardContent>
-                        <Typography color="textSecondary" gutterBottom>
-                          Distance (Optimized)
-                        </Typography>
-                        <Typography variant="h4" color="primary">
-                          {routeData.metrics.optimized.distance_nm.toFixed(0)}{" "}
-                          NM
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                  <Grid size={{ xs: 12, md: 4 }}>
-                    <Card>
-                      <CardContent>
-                        <Typography color="textSecondary" gutterBottom>
-                          Fuel Cost (Est.)
-                        </Typography>
-                        <Typography variant="h4" color="secondary">
-                          $
-                          {routeData.metrics.optimized.fuel_cost_usd.toLocaleString()}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                  <Grid size={{ xs: 12, md: 45 }}>
-                    <Card>
-                      <CardContent>
-                        <Typography color="textSecondary" gutterBottom>
-                          CO₂ Emissions
-                        </Typography>
-                        <Typography variant="h4" sx={{ color: "#2e7d32" }}>
-                          {routeData.metrics.optimized.emissions_tons.toFixed(
-                            1
-                          )}{" "}
-                          tons
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                </Grid>
+                <Box sx={{ mb: 2, display: "flex", gap: 3, flexWrap: "wrap" }}>
+                  <Typography variant="body1">
+                    <strong>Distance:</strong>{" "}
+                    {routeData.metrics.optimized.distance_nm.toFixed(0)} NM
+                  </Typography>
+                  <Typography variant="body1">
+                    <strong>Fuel Cost:</strong> $
+                    {routeData.metrics.optimized.fuel_cost_usd.toLocaleString()}
+                  </Typography>
+                  <Typography variant="body1">
+                    <strong>Emissions:</strong>{" "}
+                    {routeData.metrics.optimized.emissions_tons.toFixed(1)} tons
+                    CO₂
+                  </Typography>
+                </Box>
               )}
-            </Box>
+
+              <RouteMap data={routeData} />
+            </Paper>
+          )}
+
+          {/* Initial State Message */}
+          {!routeData && !loading && (
+            <Paper
+              elevation={2}
+              sx={{
+                p: 5,
+                textAlign: "center",
+                backgroundColor: "#f5f5f5",
+              }}
+            >
+              <DirectionsBoatIcon
+                sx={{ fontSize: 60, color: "primary.main", mb: 2 }}
+              />
+              <Typography variant="h5" gutterBottom>
+                Select ports and click "Optimize Route" to begin
+              </Typography>
+              <Typography variant="body1" color="textSecondary">
+                The system will generate an optimal maritime route avoiding land
+                and considering navigational constraints.
+              </Typography>
+            </Paper>
           )}
         </Box>
       </Container>
